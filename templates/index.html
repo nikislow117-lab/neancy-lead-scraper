@@ -46,14 +46,15 @@
             <div class="w-1.5 h-1.5 rounded-full" :class="running ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-700'"></div>
             <span x-text="leads.length + ' leads'"></span>
         </div>
-        <input type="text" x-model="search" placeholder="/" aria-label="Filter leads" 
+        <input type="text" x-model="search" placeholder="/" aria-label="Filter leads"
             class="bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1 text-[11px] outline-none focus:border-zinc-600 w-24 sm:w-36 placeholder-zinc-700 text-zinc-300">
+        <label class="flex items-center gap-1 text-[11px] text-zinc-400 shrink-0">
+            <input type="checkbox" x-model="noWebsiteOnly" class="accent-emerald-600">
+            No website only
+        </label>
         <button @click="showSettings = true" aria-label="Settings" class="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button> <label class="flex items-center gap-1 text-[11px] text-zinc-400 shrink-0">
-    <input type="checkbox" x-model="noWebsiteOnly" class="accent-emerald-600">
-    No website only
-</label>
+        </button>
     </div>
 </header>
 
@@ -81,17 +82,14 @@
                         <td class="px-4 py-2">
                             <a x-show="lead.Email" :href="'mailto:' + lead.Email" class="text-zinc-400 hover:text-zinc-100 truncate block max-w-[200px]" x-text="lead.Email"></a>
                             <span x-show="!lead.Email" class="text-zinc-800">—</span>
+                            <button
+                                x-show="lead.Email"
+                                @click="sendOffer(lead)"
+                                class="ml-2 px-2 py-1 text-[10px] rounded bg-emerald-700 hover:bg-emerald-600 text-white"
+                            >
+                                Send Offer
+                            </button>
                         </td>
-                        <a class="px-4 py-2" :href="'mailto:' + lead.Email">...</a>
-<span x-show="!lead.Email" class="text-zinc-...">...</span>
-<button
-  x-show="lead.Email"
-  @click="sendOffer(lead)"
-  class="ml-2 px-2 py-1 text-[10px] rounded bg-emerald-700 hover:bg-emerald-600 text-white"
->
-  Send Offer
-</button>
-</td>
                         <td class="px-4 py-2 text-zinc-400 whitespace-nowrap" x-text="lead.Phone || '—'"></td>
                         <td class="px-4 py-2 text-zinc-500 truncate max-w-[160px] hidden lg:table-cell" x-text="lead.Category || '—'"></td>
                         <td class="px-4 py-2 text-zinc-600 truncate max-w-[200px] hidden md:table-cell" x-text="lead.Address || '—'"></td>
@@ -240,23 +238,24 @@ function app() {
             await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.config) });
             Alpine.store('toasts').show('Saved.');
         },
+
         async sendOffer(lead) {
-    try {
-        const res = await fetch('/api/send-offer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: lead.Email, business_name: lead.Company })
-        });
-        const data = await res.json();
-        if (data.status === 'sent') {
-            Alpine.store('toasts').show('Offer sent to ' + lead.Company);
-        } else {
-            Alpine.store('toasts').show('Failed: ' + (data.error || 'Unknown error'), 'error');
-        }
-    } catch (err) {
-        Alpine.store('toasts').show('Error: ' + err.message, 'error');
-    }
-},
+            try {
+                const res = await fetch('/api/send-offer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: lead.Email, business_name: lead.Company })
+                });
+                const data = await res.json();
+                if (data.status === 'sent') {
+                    Alpine.store('toasts').show('Offer sent to ' + lead.Company);
+                } else {
+                    Alpine.store('toasts').show('Failed: ' + (data.error || 'Unknown error'), 'error');
+                }
+            } catch (err) {
+                Alpine.store('toasts').show('Error: ' + err.message, 'error');
+            }
+        },
 
         startResizeLog(e) {
             const startX = e.clientX, startW = this.logWidth;
@@ -267,14 +266,16 @@ function app() {
         },
 
         get filteredLeads() {
-    let result = this.leads;
-    if (this.noWebsiteOnly) {
-        result = result.filter(l => !l.Website || l.Website.trim() === '');
-    }
-    if (!this.search) return result;
-    const q = this.search.toLowerCase();
-    return result.filter(l => Object.values(l).some(v => String(v).toLowerCase().includes(q)));
-},
+            let result = this.leads;
+            if (this.noWebsiteOnly) {
+                result = result.filter(l => !l.Website || l.Website.trim() === '');
+            }
+            if (!this.search) return result;
+            const q = this.search.toLowerCase();
+            return result.filter(l => Object.values(l).some(v => String(v).toLowerCase().includes(q)));
+        }
+    };
+}
 </script>
 </body>
 </html>
