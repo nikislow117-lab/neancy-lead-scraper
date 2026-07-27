@@ -9,6 +9,8 @@ from pathlib import Path
 
 import aiohttp
 from fastapi import FastAPI, Request
+import smtplib
+from email.mime.text import MIMEText
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -290,6 +292,36 @@ async def save_config(request: Request):
         return JSONResponse({"error": "Invalid"}, status_code=400)
     CFG_FILE.write_text(json.dumps(cleaned))
     return {"success": True}
+@app.post("/api/send-offer")
+async def send_offer(request: Request):
+    data = await request.json()
+    to_email = data.get("email")
+    business_name = data.get("business_name", "there")
+
+    if not to_email:
+        return JSONResponse({"error": "No email provided"}, status_code=400)
+
+    agency_email = os.environ.get("AGENCY_EMAIL")
+    agency_password = os.environ.get("AGENCY_EMAIL_PASSWORD")
+    template = os.environ.get("OFFER_EMAIL_TEMPLATE", "Hi {business_name}, we'd love to help you get online!")
+
+    if not agency_email or not agency_password:
+        return JSONResponse({"error": "Agency email not configured"}, status_code=500)
+
+    body = template.replace("{business_name}", business_name)
+    msg = MIMEText(body)
+    msg["Subject"] = f"A quick offer for {business_name}"
+    msg["From"] = agency_email
+    msg["To"] = to_email
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(agency_email, agency_password)
+            server.sendmail(agency_email, to_email, msg.as_string())
+        return JSONResponse({"status": "sent"})
+    except Exception as e:
+        logging.error(f"Failed to send email: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/download")

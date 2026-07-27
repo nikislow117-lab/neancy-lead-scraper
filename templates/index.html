@@ -79,6 +79,16 @@
                             <a x-show="lead.Email" :href="'mailto:' + lead.Email" class="text-zinc-400 hover:text-zinc-100 truncate block max-w-[200px]" x-text="lead.Email"></a>
                             <span x-show="!lead.Email" class="text-zinc-800">—</span>
                         </td>
+                        <a class="px-4 py-2" :href="'mailto:' + lead.Email">...</a>
+<span x-show="!lead.Email" class="text-zinc-...">...</span>
+<button
+  x-show="lead.Email"
+  @click="sendOffer(lead)"
+  class="ml-2 px-2 py-1 text-[10px] rounded bg-emerald-700 hover:bg-emerald-600 text-white"
+>
+  Send Offer
+</button>
+</td>
                         <td class="px-4 py-2 text-zinc-400 whitespace-nowrap" x-text="lead.Phone || '—'"></td>
                         <td class="px-4 py-2 text-zinc-500 truncate max-w-[160px] hidden lg:table-cell" x-text="lead.Category || '—'"></td>
                         <td class="px-4 py-2 text-zinc-600 truncate max-w-[200px] hidden md:table-cell" x-text="lead.Address || '—'"></td>
@@ -227,6 +237,23 @@ function app() {
             await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.config) });
             Alpine.store('toasts').show('Saved.');
         },
+        async sendOffer(lead) {
+    try {
+        const res = await fetch('/api/send-offer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: lead.Email, business_name: lead.Company })
+        });
+        const data = await res.json();
+        if (data.status === 'sent') {
+            Alpine.store('toasts').show('Offer sent to ' + lead.Company);
+        } else {
+            Alpine.store('toasts').show('Failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (err) {
+        Alpine.store('toasts').show('Error: ' + err.message, 'error');
+    }
+},
 
         startResizeLog(e) {
             const startX = e.clientX, startW = this.logWidth;
