@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lead Scraper</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script>tailwind = { darkMode: 'media', theme: { extend: { fontFamily: { mono: ['JetBrains Mono', 'ui-monospace', 'monospace'] } } } }</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.14.3/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        [x-cloak]{display:none!important}
+    </style>
+</head>
+<body class="font-mono bg-zinc-950 text-zinc-100 h-screen flex flex-col overflow-hidden" x-data="app()" x-init="init()">
+
+<!-- Top bar -->
+<header class="h-11 border-b border-zinc-800 flex items-center gap-3 px-4 shrink-0">
+    <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-zinc-400" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2C8.686 2 6 4.686 6 8c0 4.418 6 12 6 12s6-7.582 6-12c0-3.314-2.686-6-6-6z" fill="currentColor"/>
+            <circle cx="12" cy="8" r="2.25" fill="#09090b"/>
+        </svg>
+        <span class="text-xs font-bold tracking-tight text-zinc-300 hidden sm:block">Lead Scraper</span>
+    </div>
+
+    <div class="h-4 w-px bg-zinc-800 hidden sm:block"></div>
+
+    <div class="flex items-center gap-1.5">
+        <button @click="control('start')" x-show="!running" class="px-2.5 py-1 text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20">▶ Start</button>
+        <button @click="control('stop')" x-show="running" class="px-2.5 py-1 text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 rounded hover:bg-red-500/20">■ Stop</button>
+        <button @click="exportCsv()" class="px-2.5 py-1 text-[11px] font-medium text-zinc-500 border border-zinc-800 rounded hover:text-zinc-300 hover:border-zinc-700">Export</button>
+        <button @click="showClearConfirm = !showClearConfirm" class="px-2.5 py-1 text-[11px] font-medium text-zinc-500 border border-zinc-800 rounded hover:text-zinc-300 hover:border-zinc-700">Clear</button>
+        <template x-if="showClearConfirm">
+            <div class="flex items-center gap-1.5 ml-1">
+                <span class="text-[11px] text-zinc-600">sure?</span>
+                <button @click="control('clear'); showClearConfirm = false" class="px-2 py-0.5 text-[11px] text-red-400 border border-red-500/30 rounded hover:bg-red-500/10">y</button>
+                <button @click="showClearConfirm = false" class="px-2 py-0.5 text-[11px] text-zinc-500 border border-zinc-800 rounded hover:text-zinc-300">n</button>
+            </div>
+        </template>
+    </div>
+
+    <div class="ml-auto flex items-center gap-3">
+        <div class="flex items-center gap-2 text-[11px] text-zinc-500">
+            <div class="w-1.5 h-1.5 rounded-full" :class="running ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-700'"></div>
+            <span x-text="leads.length + ' leads'"></span>
+        </div>
+        <input type="text" x-model="search" placeholder="/" aria-label="Filter leads"
+            class="bg-zinc-900 border border-zinc-800 rounded px-2.5 py-1 text-[11px] outline-none focus:border-zinc-600 w-24 sm:w-36 placeholder-zinc-700 text-zinc-300">
+        <button @click="showSettings = true" aria-label="Settings" class="p-1.5 rounded text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+    </div>
+</header>
+
+<!-- Main content -->
+<div class="flex flex-1 overflow-hidden min-h-0">
+
+    <!-- Table -->
+    <div class="flex-1 overflow-auto min-w-0">
+        <table class="w-full text-[11px] border-collapse">
+            <thead class="sticky top-0 bg-zinc-950 border-b border-zinc-800 z-10">
+                <tr class="text-zinc-600 uppercase text-[10px] tracking-wider">
+                    <th class="text-left px-4 py-2 font-medium">Company</th>
+                    <th class="text-left px-4 py-2 font-medium">Email</th>
+                    <th class="text-left px-4 py-2 font-medium">Phone</th>
+                    <th class="text-left px-4 py-2 font-medium hidden lg:table-cell">Category</th>
+                    <th class="text-left px-4 py-2 font-medium hidden md:table-cell">Address</th>
+                    <th class="text-left px-4 py-2 font-medium">Rating</th>
+                    <th class="text-right px-4 py-2 font-medium">Links</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-900">
+                <template x-for="lead in filteredLeads" :key="lead['Maps URL']">
+                    <tr class="hover:bg-zinc-900/60 group">
+                        <td class="px-4 py-2 font-medium text-zinc-200 truncate max-w-[240px]" x-text="lead.Company"></td>
+                        <td class="px-4 py-2">
+                            <a x-show="lead.Email" :href="'mailto:' + lead.Email" class="text-zinc-400 hover:text-zinc-100 truncate block max-w-[200px]" x-text="lead.Email"></a>
+                            <span x-show="!lead.Email" class="text-zinc-800">—</span>
+                        </td>
+                        <td class="px-4 py-2 text-zinc-400 whitespace-nowrap" x-text="lead.Phone || '—'"></td>
+                        <td class="px-4 py-2 text-zinc-500 truncate max-w-[160px] hidden lg:table-cell" x-text="lead.Category || '—'"></td>
+                        <td class="px-4 py-2 text-zinc-600 truncate max-w-[200px] hidden md:table-cell" x-text="lead.Address || '—'"></td>
+                        <td class="px-4 py-2 whitespace-nowrap text-zinc-500">
+                            <span x-show="lead.Rating" x-text="lead.Rating + (lead.Reviews ? ' (' + lead.Reviews + ')' : '')"></span>
+                            <span x-show="!lead.Rating" class="text-zinc-800">—</span>
+                        </td>
+                        <td class="px-4 py-2 text-right whitespace-nowrap opacity-40 group-hover:opacity-100">
+                            <a :href="lead.Website" target="_blank" x-show="lead.Website" class="text-zinc-400 hover:text-zinc-100 mr-1.5">↗</a>
+                            <a :href="lead['Maps URL']" target="_blank" class="text-zinc-400 hover:text-zinc-100">◎</a>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <div x-show="filteredLeads.length === 0" class="px-4 py-12 text-center text-zinc-700 text-xs">
+            <span x-text="search ? 'No matches.' : 'No leads yet — configure settings and hit Start.'"></span>
+        </div>
+    </div>
+
+    <!-- Log panel (right side on desktop) -->
+    <div class="hidden md:flex flex-col border-l border-zinc-800 bg-zinc-950 shrink-0 relative" :style="'width:' + logWidth + 'px'">
+        <div @mousedown="startResizeLog($event)" class="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize hover:bg-zinc-700 z-10"></div>
+        <div class="px-3 py-2 border-b border-zinc-800/50 flex items-center gap-2 shrink-0">
+            <div class="w-1.5 h-1.5 rounded-full" :class="running ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-800'"></div>
+            <span class="text-[10px] text-zinc-600 uppercase tracking-widest">log</span>
+            <span class="ml-auto text-[10px] text-zinc-700" x-text="logLines.length + ' lines'"></span>
+        </div>
+        <div x-ref="logs" class="flex-1 overflow-y-auto px-3 py-2 space-y-px">
+            <template x-for="(line, i) in logLines" :key="i">
+                <div class="text-[11px] text-zinc-500 leading-5" x-text="line"></div>
+            </template>
+            <div x-show="logLines.length === 0" class="text-[11px] text-zinc-700">Waiting for activity...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Mobile log toggle -->
+<button @click="showMobileLog = !showMobileLog" class="md:hidden fixed bottom-4 right-4 z-40 w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 hover:text-zinc-200">
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h10"/></svg>
+</button>
+<div x-show="showMobileLog" x-cloak class="md:hidden fixed inset-x-0 bottom-0 z-30 h-1/2 bg-zinc-950 border-t border-zinc-800 flex flex-col">
+    <div class="px-4 py-2 border-b border-zinc-800/50 flex items-center justify-between shrink-0">
+        <span class="text-[10px] text-zinc-600 uppercase tracking-widest">log</span>
+        <button @click="showMobileLog = false" class="text-zinc-600 hover:text-zinc-300 text-xs">✕</button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-4 py-2 space-y-px">
+        <template x-for="(line, i) in logLines" :key="'m'+i">
+            <div class="text-[11px] text-zinc-600 leading-5" x-text="line"></div>
+        </template>
+    </div>
+</div>
+
+<!-- Settings modal -->
+<div x-show="showSettings" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
+    <div @click="showSettings = false" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative bg-zinc-900 border border-zinc-800 rounded-lg w-full max-w-md mx-4 p-6" @keydown.escape.window="showSettings = false">
+        <div class="flex items-center justify-between mb-5">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-zinc-300">Settings</h2>
+            <button @click="showSettings = false" class="text-zinc-600 hover:text-zinc-300 text-sm">✕</button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Search Terms</label>
+                <input type="text" x-model="config.search_terms" placeholder="Plumbers, Dentists"
+                    class="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-500">
+            </div>
+            <div>
+                <label class="block text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Locations</label>
+                <input type="text" x-model="config.locations" placeholder="New York, London"
+                    class="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-500">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Max Results</label>
+                    <input type="number" x-model="config.max_results" placeholder="0"
+                        class="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-500">
+                </div>
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Concurrency</label>
+                    <input type="number" x-model="config.concurrency" placeholder="3"
+                        class="w-full bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-zinc-500">
+                </div>
+            </div>
+            <button @click="saveConfig(); showSettings = false" class="w-full py-2 text-[11px] font-medium bg-zinc-100 text-zinc-900 rounded hover:bg-white">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toasts -->
+<div class="fixed bottom-4 left-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <template x-for="t in $store.toasts.list" :key="t.id">
+        <div x-show="t.visible" x-transition
+            :class="t.type === 'error' ? 'border-red-500/30 text-red-400' : 'border-zinc-800 text-zinc-400'"
+            class="pointer-events-auto px-3 py-2 rounded border text-[11px] font-medium bg-zinc-900"
+            x-text="t.msg"></div>
+    </template>
+</div>
+
+<script>
+function app() {
+    return {
+        running: false, leads: [], logLines: [], search: '', config: {},
+        showClearConfirm: false, showSettings: false, showMobileLog: false,
+        logWidth: 280, _pollFails: 0,
+
+        init() {
+            Alpine.store('toasts', {
+                list: [], _id: 0,
+                show(msg, type = 'info', ms = 3000) {
+                    const t = { id: ++this._id, msg, type, visible: true };
+                    this.list.push(t);
+                    setTimeout(() => { t.visible = false; setTimeout(() => this.list.splice(this.list.indexOf(t), 1), 200); }, ms);
+                }
+            });
+            this.poll().then(() => this._schedule());
+        },
+
+        _schedule() {
+            const delay = this._pollFails > 3 ? 15000 : (this.running ? 2000 : 6000);
+            setTimeout(async () => { await this.poll(); this._schedule(); }, delay);
+        },
+
+        async poll() {
+            try {
+                const d = await fetch('/api/status').then(r => r.json());
+                Object.assign(this, { running: d.running, leads: d.leads, logLines: d.logs });
+                if (!this.showSettings) this.config = d.config;
+                this._pollFails = 0;
+                this.$nextTick(() => { const el = this.$refs.logs; if (el) el.scrollTop = el.scrollHeight; });
+            } catch { if (++this._pollFails === 3) Alpine.store('toasts').show('Connection lost.', 'error'); }
+        },
+
+        async control(action) { await fetch(`/control/${action}`, { method: 'POST' }); await this.poll(); },
+
+        async exportCsv() {
+            const res = await fetch('/download');
+            if (!res.ok) { Alpine.store('toasts').show('No data yet.', 'error'); return; }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(await res.blob()); a.download = 'contacts.csv';
+            a.click(); URL.revokeObjectURL(a.href);
+            Alpine.store('toasts').show('Downloaded.');
+        },
+
+        async saveConfig() {
+            await fetch('/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(this.config) });
+            Alpine.store('toasts').show('Saved.');
+        },
+
+        startResizeLog(e) {
+            const startX = e.clientX, startW = this.logWidth;
+            const onMove = e => this.logWidth = Math.max(200, Math.min(600, startW - (e.clientX - startX)));
+            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); document.body.style.cursor = document.body.style.userSelect = ''; };
+            document.body.style.cursor = 'ew-resize'; document.body.style.userSelect = 'none';
+            window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        },
+
+        get filteredLeads() {
+            if (!this.search) return this.leads;
+            const q = this.search.toLowerCase();
+            return this.leads.filter(l => Object.values(l).some(v => String(v).toLowerCase().includes(q)));
+        }
+    };
+}
+</script>
+</body>
+</html>

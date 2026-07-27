@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.git/
+.gitignore
+.dockerignore
+contacts.csv
+config.json
+scraper.log
+scraper.pid
+tests/
+venv/
+.venv/
+.env
